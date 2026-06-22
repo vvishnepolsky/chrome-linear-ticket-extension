@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Captura</title>
+  </head>
+  <body>
+    <header class="hdr">
+      <div class="brand">
+        <img src="icons/icon32.png" width="22" height="22" alt="" />
+        <span>Captura</span>
+      </div>
+      <button id="settings" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
+    </header>
+
+    <div id="no-key" class="banner hidden">
+      No Linear API key yet. <a href="#" id="open-options">Add it in settings →</a>
+    </div>
+
+    <main class="actions" id="idle-view">
+      <button class="action" id="btn-screenshot">
+        <span class="action-icon">📸</span>
+        <span class="action-label">
+          <strong>Screenshot</strong>
+          <small>Capture the visible area</small>
+        </span>
+      </button>
+
+      <button class="action" id="btn-fullpage">
+        <span class="action-icon">📄</span>
+        <span class="action-label">
+          <strong>Full page</strong>
+          <small>Scroll &amp; stitch the whole page</small>
+        </span>
+      </button>
+
+      <button class="action" id="btn-area">
+        <span class="action-icon">✂️</span>
+        <span class="action-label">
+          <strong>Capture area</strong>
+          <small>Drag to select a region</small>
+        </span>
+      </button>
+
+      <button class="action" id="btn-record">
+        <span class="action-icon">🎥</span>
+        <span class="action-label">
+          <strong>Record screen</strong>
+          <small>Record this tab as video</small>
+        </span>
+      </button>
+
+      <label class="audio-toggle">
+        <input type="checkbox" id="with-audio" checked />
+        Include tab audio
+      </label>
+    </main>
+
+    <main class="actions hidden" id="recording-view">
+      <div class="rec-status">
+        <span class="rec-dot"></span>
+        <span>Recording…</span>
+        <span id="rec-timer" class="rec-timer">0:00</span>
+      </div>
+      <button class="action stop" id="btn-stop">
+        <span class="action-icon">⏹</span>
+        <span class="action-label"><strong>Stop & edit</strong></span>
+      </button>
+    </main>
+
+    <div id="status" class="status hidden"></div>
+
+    <footer class="ftr">
+      Captures console logs, network &amp; environment automatically.
+    </footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

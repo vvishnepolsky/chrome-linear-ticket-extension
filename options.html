@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="options.css" />
+    <title>Captura — Settings</title>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <img src="icons/icon48.png" width="36" height="36" alt="" />
+        <div>
+          <h1>Captura settings</h1>
+          <p class="sub">Connect Linear so captures can be filed as issues.</p>
+        </div>
+      </header>
+
+      <section class="card">
+        <h2>Linear API key</h2>
+        <p class="help">
+          Create a <strong>Personal API key</strong> in Linear:
+          <em>Settings → Security &amp; access → Personal API keys → New key</em>.
+          It's stored locally in your browser and only sent to <code>api.linear.app</code>.
+        </p>
+        <div class="row">
+          <input type="password" id="api-key" placeholder="lin_api_…" autocomplete="off" spellcheck="false" />
+          <button id="toggle-key" class="ghost" type="button">Show</button>
+        </div>
+        <div class="row">
+          <button id="verify" class="primary">Save &amp; verify</button>
+          <span id="verify-status" class="vstatus"></span>
+        </div>
+      </section>
+
+      <section class="card" id="defaults-card">
+        <h2>Defaults</h2>
+        <p class="help">Pre-select a team and project in the editor (optional).</p>
+        <label class="field">
+          <span>Default team</span>
+          <select id="default-team"><option value="">—</option></select>
+        </label>
+        <label class="field">
+          <span>Default project</span>
+          <select id="default-project"><option value="">—</option></select>
+        </label>
+        <label class="field">
+          <span>Default status</span>
+          <select id="default-state"><option value="">Team default</option></select>
+        </label>
+        <label class="field">
+          <span>Default priority</span>
+          <select id="default-priority">
+            <option value="0">No priority</option>
+            <option value="1">Urgent</option>
+            <option value="2">High</option>
+            <option value="3">Medium</option>
+            <option value="4">Low</option>
+          </select>
+        </label>
+        <button id="save-defaults" class="primary">Save defaults</button>
+        <span id="defaults-status" class="vstatus"></span>
+      </section>
+
+      <footer class="ftr">Captura · a Jam.dev-style bug reporter for Linear</footer>
+    </div>
+    <script src="options.js"></script>
+  </body>
+</html>

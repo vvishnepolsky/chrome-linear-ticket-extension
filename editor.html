@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="editor.css" />
+    <title>Captura — New Linear issue</title>
+  </head>
+  <body>
+    <div class="app">
+      <!-- ============ Left: preview + annotation ============ -->
+      <div class="stage">
+        <div class="stage-toolbar" id="anno-toolbar">
+          <div class="tool-group" id="tools">
+            <button class="tool active" data-tool="select" title="Select / move">🖱</button>
+            <button class="tool" data-tool="rect" title="Rectangle">▭</button>
+            <button class="tool" data-tool="arrow" title="Arrow">↗</button>
+            <button class="tool" data-tool="pen" title="Freehand">✏️</button>
+            <button class="tool" data-tool="text" title="Text">T</button>
+            <button class="tool" data-tool="blur" title="Blur / redact">▩</button>
+          </div>
+          <div class="tool-group colors" id="colors">
+            <button class="swatch active" data-color="#E5484D" style="background:#E5484D"></button>
+            <button class="swatch" data-color="#F5A623" style="background:#F5A623"></button>
+            <button class="swatch" data-color="#2F9E44" style="background:#2F9E44"></button>
+            <button class="swatch" data-color="#5E6AD2" style="background:#5E6AD2"></button>
+            <button class="swatch" data-color="#1B1B1F" style="background:#1B1B1F"></button>
+          </div>
+          <div class="tool-group">
+            <button class="tool" id="undo" title="Undo">⟲</button>
+            <button class="tool" id="clear" title="Clear annotations">🗑</button>
+          </div>
+        </div>
+
+        <div class="canvas-wrap" id="canvas-wrap">
+          <canvas id="canvas" class="hidden"></canvas>
+          <video id="video" class="hidden" controls></video>
+          <div id="loading" class="loading">Loading capture…</div>
+        </div>
+      </div>
+
+      <!-- ============ Right: issue form + diagnostics ============ -->
+      <aside class="panel">
+        <div class="panel-head">
+          <img src="icons/icon32.png" width="22" height="22" alt="" />
+          <strong>New Linear issue</strong>
+        </div>
+
+        <div id="no-key-warn" class="warn hidden">
+          No Linear API key set. <a href="#" id="open-options">Open settings →</a>
+        </div>
+
+        <div class="form">
+          <label class="field">
+            <span>Title</span>
+            <input type="text" id="title" placeholder="Short summary of the bug" />
+          </label>
+
+          <label class="field">
+            <span>Description</span>
+            <textarea id="description" rows="4" placeholder="What happened? Steps to reproduce, expected vs. actual…"></textarea>
+          </label>
+
+          <div class="grid2">
+            <label class="field">
+              <span>Team</span>
+              <select id="team"><option value="">Loading…</option></select>
+            </label>
+            <label class="field">
+              <span>Project</span>
+              <select id="project"><option value="">—</option></select>
+            </label>
+          </div>
+
+          <div class="grid2">
+            <label class="field">
+              <span>Status</span>
+              <select id="state"><option value="">Team default</option></select>
+            </label>
+            <label class="field">
+              <span>Priority</span>
+              <select id="priority">
+                <option value="0">No priority</option>
+                <option value="1">Urgent</option>
+                <option value="2">High</option>
+                <option value="3">Medium</option>
+                <option value="4">Low</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Labels</span>
+            <select id="labels" multiple size="1"></select>
+          </label>
+
+          <label class="checkline">
+            <input type="checkbox" id="include-attachment" checked />
+            Attach capture (<span id="attach-kind">screenshot</span>) to the issue
+          </label>
+
+          <button id="submit" class="primary big">Create issue</button>
+          <div id="submit-status" class="submit-status"></div>
+          <div id="success" class="success hidden"></div>
+        </div>
+
+        <!-- Diagnostics accordion -->
+        <div class="diag">
+          <details id="env-details">
+            <summary>Environment <span class="count" id="env-count"></span></summary>
+            <div id="env-body" class="diag-body mono"></div>
+          </details>
+          <details id="console-details">
+            <summary>Console <span class="count" id="console-count">0</span></summary>
+            <div id="console-body" class="diag-body mono"></div>
+          </details>
+          <details id="network-details">
+            <summary>Network <span class="count" id="network-count">0</span></summary>
+            <div id="network-body" class="diag-body mono"></div>
+          </details>
+        </div>
+      </aside>
+    </div>
+
+    <!-- floating text-input editor for the text tool -->
+    <input type="text" id="text-input" class="text-input hidden" />
+
+    <script type="module" src="editor.js"></script>
+  </body>
+</html>

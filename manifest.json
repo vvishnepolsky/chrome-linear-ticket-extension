@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Captura — Bug Reports to Linear",
+  "version": "1.0.0",
+  "description": "Capture screenshots or screen recordings with console logs, network requests, and environment metadata — then file a Linear issue in one click. A Jam.dev-style bug reporter.",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "tabCapture",
+    "storage",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://api.linear.app/*",
+    "https://uploads.linear.app/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Captura — report a bug to Linear",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["inject.js", "editor.html", "editor.js", "editor.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
