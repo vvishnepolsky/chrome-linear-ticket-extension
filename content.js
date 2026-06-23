@@ -21,10 +21,22 @@
     if (event.source !== window) return;
     const data = event.data;
     if (!data || data.__captura !== true || data.src !== "captura-page") return;
-    chrome.runtime
-      .sendMessage({ type: "CAPTURA_EVENT", kind: data.kind, payload: data.payload, ts: data.ts })
-      .catch(() => {});
+    sendToWorker({ type: "CAPTURA_EVENT", kind: data.kind, payload: data.payload, ts: data.ts });
   });
+
+  // chrome.runtime.sendMessage throws *synchronously* with "Extension context
+  // invalidated" if the extension was reloaded while this content script kept
+  // running in an already-open tab. A trailing .catch() only handles async
+  // rejections, so guard the live context and swallow the sync throw too.
+  function sendToWorker(message) {
+    try {
+      if (!chrome.runtime?.id) return; // context gone after reload/update
+      const p = chrome.runtime.sendMessage(message);
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } catch (_) {
+      /* extension context invalidated — nothing to do */
+    }
+  }
 
   // State used while stitching a full-page screenshot.
   const fp = { origX: 0, origY: 0, origBehavior: "", hiddenFixed: [], fixedHidden: false };
@@ -175,22 +187,20 @@
       const r = rectOf(e);
       cleanup();
       if (r.width < 5 || r.height < 5) {
-        chrome.runtime.sendMessage({ type: "CAPTURA_AREA_CANCELLED" }).catch(() => {});
+        sendToWorker({ type: "CAPTURA_AREA_CANCELLED" });
         return;
       }
       // Let the overlay removal paint before the worker captures the tab.
       requestAnimationFrame(() =>
         requestAnimationFrame(() =>
-          chrome.runtime
-            .sendMessage({ type: "CAPTURA_AREA_SELECTED", rect: r, dpr: window.devicePixelRatio || 1 })
-            .catch(() => {})
+          sendToWorker({ type: "CAPTURA_AREA_SELECTED", rect: r, dpr: window.devicePixelRatio || 1 })
         )
       );
     };
     const onKey = (e) => {
       if (e.key === "Escape") {
         cleanup();
-        chrome.runtime.sendMessage({ type: "CAPTURA_AREA_CANCELLED" }).catch(() => {});
+        sendToWorker({ type: "CAPTURA_AREA_CANCELLED" });
       }
     };
 
