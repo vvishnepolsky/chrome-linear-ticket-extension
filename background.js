@@ -2,12 +2,26 @@
 // keeps a per-tab ring buffer of console/network events, brokers all Linear
 // API calls, and opens the editor.
 
-import { putCapture, getCapture, deleteCapture, pruneCaptures } from "./db.js";
+import {
+  putCapture,
+  getCapture,
+  deleteCapture,
+  pruneCaptures,
+  putDraft,
+  getDraft,
+  deleteDraft,
+} from "./db.js";
 import * as linear from "./linear.js";
 
 const RING_LIMIT = 500; // max console/network events kept per tab
 const ringBuffers = new Map(); // tabId -> [{kind, payload, ts}]
 const pendingMeta = new Map(); // captureId -> {meta, logs} stashed for the offscreen recorder
+
+// The current draft accumulates captures into one Linear issue. While its
+// editor tab is open, new captures are appended to it instead of opening a
+// fresh editor each time. Lives in memory; if the worker is torn down the
+// next capture simply starts a new draft.
+const activeDraft = { id: null, tabId: null };
 
 // ---------------------------------------------------------------------------
 // Ring buffer of page events
@@ -91,12 +105,35 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return false;
     }
 
+    case "GET_DRAFT_STATE":
+      getDraftState()
+        .then((state) => sendResponse({ ok: true, ...state }))
+        .catch((err) => sendResponse({ ok: false, error: errStr(err) }));
+      return true;
+
+    case "NEW_DRAFT":
+      // Detach from the current draft so the next capture starts a fresh one.
+      activeDraft.id = null;
+      activeDraft.tabId = null;
+      sendResponse({ ok: true });
+      return false;
+
+    case "SET_DRAFT_TAB":
+      // The editor reports its own tab on load so captures taken afterwards
+      // append to the draft it's showing (survives a worker restart).
+      activeDraft.id = msg.draftId;
+      activeDraft.tabId = sender.tab && sender.tab.id;
+      sendResponse({ ok: true });
+      return false;
+
     case "RECORDING_COMPLETE":
       pendingMeta.delete(msg.captureId);
       recordingState.active = false;
       recordingState.tabId = null;
       updateBadge(false);
-      openEditor(msg.captureId);
+      addToDraft(msg.captureId).catch((err) =>
+        console.warn("Failed to open recording:", errStr(err))
+      );
       closeOffscreenSoon();
       return false;
 
@@ -176,7 +213,7 @@ async function handleScreenshot(tabId) {
     meta,
     logs,
   });
-  await openEditor(id);
+  await addToDraft(id);
   return id;
 }
 
@@ -251,7 +288,7 @@ async function handleFullPage(tabId) {
     logs,
     note: truncated ? "Page exceeded the max capture height and was truncated." : null,
   });
-  await openEditor(id);
+  await addToDraft(id);
   return id;
 }
 
@@ -285,7 +322,7 @@ async function handleAreaCapture(tab, rect, dpr) {
   const blob = await oc.convertToBlob({ type: "image/png" });
   const id = newId();
   await putCapture({ id, kind: "image", blob, mimeType: "image/png", createdAt: Date.now(), meta, logs });
-  await openEditor(id);
+  await addToDraft(id);
 }
 
 // captureVisibleTab is rate-limited; retry once after a pause on overflow.
@@ -368,18 +405,31 @@ async function handleCreateTicket(msg) {
   const key = await getKey();
   if (!key) throw new Error("No Linear API key set. Open the extension options.");
 
-  const cap = await getCapture(msg.captureId);
-  if (!cap) throw new Error("Capture not found (it may have expired).");
+  // `items` is the ordered list of captures the editor wants on the issue,
+  // each with its own caption. Annotations were already flattened into the
+  // stored capture by the editor before this call.
+  const items = Array.isArray(msg.items) ? msg.items : [];
+  if (!items.length) throw new Error("No captures to attach.");
 
-  let assetUrl = null;
-  if (msg.includeAttachment !== false) {
-    const blob = await captureToBlob(cap);
-    const filename =
-      cap.kind === "video" ? `captura-${cap.id}.webm` : `captura-${cap.id}.png`;
-    assetUrl = await linear.uploadFile(key, blob, filename);
+  const include = msg.includeAttachments !== false;
+  const sections = [];
+  for (const item of items) {
+    const cap = await getCapture(item.captureId);
+    if (!cap) continue;
+    let assetUrl = null;
+    if (include) {
+      const blob = await captureToBlob(cap);
+      const filename =
+        cap.kind === "video" ? `captura-${cap.id}.webm` : `captura-${cap.id}.png`;
+      assetUrl = await linear.uploadFile(key, blob, filename);
+    }
+    sections.push({ index: sections.length + 1, cap, caption: (item.caption || "").trim(), assetUrl });
   }
+  if (!sections.length) throw new Error("Captures not found (they may have expired).");
 
-  const description = buildDescription(msg.description, cap, assetUrl);
+  // Diagnostics (environment / console / network) come from the first capture,
+  // which is the report's primary context.
+  const description = buildDescription(msg.description, sections, sections[0].cap);
 
   const input = {
     teamId: msg.teamId,
@@ -394,25 +444,48 @@ async function handleCreateTicket(msg) {
   const issue = await linear.createIssue(key, input);
 
   // Best-effort cleanup once the ticket exists.
-  try {
-    await deleteCapture(cap.id);
-  } catch (_) {}
+  for (const item of items) {
+    try {
+      await deleteCapture(item.captureId);
+    } catch (_) {}
+  }
+  if (msg.draftId) {
+    try {
+      await deleteDraft(msg.draftId);
+    } catch (_) {}
+    if (activeDraft.id === msg.draftId) {
+      activeDraft.id = null;
+      activeDraft.tabId = null;
+    }
+  }
 
   return issue;
 }
 
-function buildDescription(userText, cap, assetUrl) {
+function buildDescription(userText, sections, primaryCap) {
   const parts = [];
   if (userText && userText.trim()) parts.push(userText.trim());
 
-  if (assetUrl) {
-    if (cap.kind === "video") {
-      parts.push(`\n**🎥 Screen recording:** [Watch](${assetUrl})`);
-    } else {
-      parts.push(`\n![screenshot](${assetUrl})`);
+  const single = sections.length === 1;
+  for (const s of sections) {
+    const lines = [];
+    if (!single) {
+      const label = s.cap.kind === "video" ? "Recording" : "Screenshot";
+      lines.push(`\n### ${label} ${s.index}${s.caption ? ` — ${s.caption}` : ""}`);
+    } else if (s.caption) {
+      lines.push(`\n_${s.caption}_`);
     }
+    if (s.assetUrl) {
+      if (s.cap.kind === "video") {
+        lines.push(`**🎥 Screen recording:** [Watch](${s.assetUrl})`);
+      } else {
+        lines.push(`![screenshot ${s.index}](${s.assetUrl})`);
+      }
+    }
+    if (lines.length) parts.push(lines.join("\n"));
   }
 
+  const cap = primaryCap;
   const m = cap.meta || {};
   const envRows = [];
   if (m.url) envRows.push(`| URL | ${m.url} |`);
@@ -504,9 +577,67 @@ async function getTab(tabId) {
   return active;
 }
 
-async function openEditor(captureId) {
-  const url = chrome.runtime.getURL(`editor.html?id=${encodeURIComponent(captureId)}`);
-  await chrome.tabs.create({ url });
+async function openEditor(draftId) {
+  const url = chrome.runtime.getURL(`editor.html?draft=${encodeURIComponent(draftId)}`);
+  return chrome.tabs.create({ url });
+}
+
+// ---------------------------------------------------------------------------
+// Draft accumulation — group captures into a single Linear issue.
+// ---------------------------------------------------------------------------
+async function tabExists(tabId) {
+  if (tabId == null) return false;
+  try {
+    await chrome.tabs.get(tabId);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Append a capture to the open draft if its editor is still around, otherwise
+// start a fresh draft and open the editor for it.
+async function addToDraft(captureId) {
+  if (activeDraft.id && (await tabExists(activeDraft.tabId))) {
+    const draft = (await getDraft(activeDraft.id)) || {
+      id: activeDraft.id,
+      captureIds: [],
+      createdAt: Date.now(),
+    };
+    if (!draft.captureIds.includes(captureId)) draft.captureIds.push(captureId);
+    await putDraft(draft);
+
+    // Tell the open editor to pull in the new capture, then surface the tab.
+    chrome.runtime
+      .sendMessage({ type: "CAPTURA_CAPTURE_ADDED", draftId: draft.id, captureId })
+      .catch(() => {});
+    try {
+      const t = await chrome.tabs.get(activeDraft.tabId);
+      await chrome.tabs.update(t.id, { active: true });
+      await chrome.windows.update(t.windowId, { focused: true });
+    } catch (_) {}
+    return draft.id;
+  }
+
+  const draft = { id: newDraftId(), captureIds: [captureId], createdAt: Date.now() };
+  await putDraft(draft);
+  const tab = await openEditor(draft.id);
+  activeDraft.id = draft.id;
+  activeDraft.tabId = tab.id;
+  return draft.id;
+}
+
+async function getDraftState() {
+  if (!activeDraft.id || !(await tabExists(activeDraft.tabId))) {
+    return { active: false, count: 0, draftId: null, tabId: null };
+  }
+  const draft = await getDraft(activeDraft.id);
+  return {
+    active: true,
+    count: draft ? draft.captureIds.length : 0,
+    draftId: activeDraft.id,
+    tabId: activeDraft.tabId,
+  };
 }
 
 async function getKey() {
@@ -529,6 +660,10 @@ function updateBadge(recording) {
 
 function newId() {
   return `cap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function newDraftId() {
+  return `draft_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function truncate(s, n) {

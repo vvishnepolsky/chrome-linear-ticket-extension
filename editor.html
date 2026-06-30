@@ -37,6 +37,19 @@
           <video id="video" class="hidden" controls></video>
           <div id="loading" class="loading">Loading capture…</div>
         </div>
+
+        <!-- Per-screenshot note + thumbnail strip -->
+        <div class="caption-bar" id="caption-bar">
+          <input
+            type="text"
+            id="caption"
+            placeholder="Describe the issue in this screenshot (optional) — annotations above are saved per screenshot"
+          />
+        </div>
+        <div class="filmstrip-wrap">
+          <div class="filmstrip" id="filmstrip"></div>
+          <div class="filmstrip-hint" id="filmstrip-hint"></div>
+        </div>
       </div>
 
       <!-- ============ Right: issue form + diagnostics ============ -->
@@ -44,6 +57,7 @@
         <div class="panel-head">
           <img src="icons/icon32.png" width="22" height="22" alt="" />
           <strong>New Linear issue</strong>
+          <button id="new-report" class="ghost-btn" title="Start a fresh report — new captures won't be added here">New report</button>
         </div>
 
         <div id="no-key-warn" class="warn hidden">
@@ -57,8 +71,8 @@
           </label>
 
           <label class="field">
-            <span>Description</span>
-            <textarea id="description" rows="4" placeholder="What happened? Steps to reproduce, expected vs. actual…"></textarea>
+            <span>Description (general)</span>
+            <textarea id="description" rows="4" placeholder="What happened overall? Steps to reproduce, expected vs. actual… (per-screenshot notes go under each image)"></textarea>
           </label>
 
           <div class="grid2">
@@ -96,7 +110,7 @@
 
           <label class="checkline">
             <input type="checkbox" id="include-attachment" checked />
-            Attach capture (<span id="attach-kind">screenshot</span>) to the issue
+            Attach <span id="attach-kind">captures</span> to the issue
           </label>
 
           <button id="submit" class="primary big">Create issue</button>
