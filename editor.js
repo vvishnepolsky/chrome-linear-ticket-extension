@@ -28,6 +28,8 @@ const tool = {
   drawing: false,
   start: null,
   current: null,
+  moving: null, // index of the shape being dragged with the select tool
+  last: null, // last pointer position while dragging
 };
 
 const canvas = $("canvas");
@@ -276,6 +278,7 @@ function wireAnnotation() {
       b.classList.add("active");
       tool.tool = b.dataset.tool;
       canvas.dataset.tool = tool.tool;
+      canvas.style.cursor = ""; // let the CSS per-tool cursor take over
     };
   });
   canvas.dataset.tool = tool.tool;
@@ -288,13 +291,14 @@ function wireAnnotation() {
     };
   });
 
-  $("undo").onclick = () => {
+  const undo = () => {
     const c = activeCap();
-    if (c) {
+    if (c && c.shapes.length) {
       c.shapes.pop();
       redraw();
     }
   };
+  $("undo").onclick = undo;
   $("clear").onclick = () => {
     const c = activeCap();
     if (c) {
@@ -306,6 +310,15 @@ function wireAnnotation() {
   canvas.addEventListener("pointerdown", onDown);
   canvas.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
+
+  // Cmd/Ctrl+Z undoes the last annotation (unless you're typing in a field).
+  window.addEventListener("keydown", (e) => {
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+    if (!typing && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      undo();
+    }
+  });
 }
 
 function toCanvasCoords(e) {
@@ -317,11 +330,30 @@ function toCanvasCoords(e) {
 }
 
 function onDown(e) {
-  if (tool.tool === "select" || !activeCap()) return;
+  const c = activeCap();
+  if (!c) return;
+  // If a text box is currently open, let this click just commit it (via blur)
+  // instead of starting a new annotation.
+  if (!$("text-input").classList.contains("hidden")) return;
   const p = toCanvasCoords(e);
 
+  // Select tool: grab the topmost shape under the cursor to drag it.
+  if (tool.tool === "select") {
+    const idx = hitTest(c.shapes, p);
+    if (idx >= 0) {
+      tool.moving = idx;
+      tool.last = p;
+      canvas.style.cursor = "grabbing";
+    }
+    return;
+  }
+
   if (tool.tool === "text") {
-    promptText(p, e.clientX, e.clientY);
+    // Drag out the box the text will live in; typing starts on release.
+    e.preventDefault();
+    tool.drawing = true;
+    tool.start = p;
+    tool.current = { tool: "textbox", color: tool.color, x0: p.x, y0: p.y, x1: p.x, y1: p.y };
     return;
   }
 
@@ -335,8 +367,23 @@ function onDown(e) {
 }
 
 function onMove(e) {
-  if (!tool.drawing) return;
   const p = toCanvasCoords(e);
+  const c = activeCap();
+
+  if (tool.tool === "select") {
+    if (tool.moving == null) {
+      // Hover feedback: show a move cursor over a draggable shape.
+      canvas.style.cursor = c && hitTest(c.shapes, p) >= 0 ? "move" : "default";
+      return;
+    }
+    if (!c) return;
+    translateShape(c.shapes[tool.moving], p.x - tool.last.x, p.y - tool.last.y);
+    tool.last = p;
+    redraw();
+    return;
+  }
+
+  if (!tool.drawing) return;
   if (tool.tool === "pen") {
     tool.current.points.push(p);
   } else {
@@ -347,46 +394,150 @@ function onMove(e) {
 }
 
 function onUp() {
+  if (tool.tool === "select") {
+    if (tool.moving != null) canvas.style.cursor = "move";
+    tool.moving = null;
+    tool.last = null;
+    return;
+  }
   if (!tool.drawing) return;
   tool.drawing = false;
   const c = activeCap();
-  if (tool.current && c) {
-    const s = tool.current;
-    const tiny = s.tool !== "pen" && Math.abs(s.x1 - s.x0) < 3 && Math.abs(s.y1 - s.y0) < 3;
-    if (!tiny) c.shapes.push(s);
-  }
+  const cur = tool.current;
   tool.current = null;
+  if (!cur || !c) {
+    redraw();
+    return;
+  }
+  if (cur.tool === "textbox") {
+    openTextBox(cur, c);
+    redraw();
+    return;
+  }
+  const tiny = cur.tool !== "pen" && Math.abs(cur.x1 - cur.x0) < 3 && Math.abs(cur.y1 - cur.y0) < 3;
+  if (!tiny) c.shapes.push(cur);
   redraw();
 }
 
-function promptText(p, clientX, clientY) {
-  const input = $("text-input");
-  input.classList.remove("hidden");
-  input.style.left = clientX + "px";
-  input.style.top = clientY + "px";
-  input.style.color = tool.color;
-  input.value = "";
-  input.focus();
+// ---- moving / hit-testing -------------------------------------------------
+function shapeBBox(s) {
+  if (s.tool === "pen") {
+    if (!s.points || !s.points.length) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const pt of s.points) {
+      minX = Math.min(minX, pt.x);
+      minY = Math.min(minY, pt.y);
+      maxX = Math.max(maxX, pt.x);
+      maxY = Math.max(maxY, pt.y);
+    }
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }
+  if (s.tool === "text") {
+    const m = textMetrics(s);
+    return { x: s.x, y: s.y, w: m.w, h: m.h };
+  }
+  return {
+    x: Math.min(s.x0, s.x1),
+    y: Math.min(s.y0, s.y1),
+    w: Math.abs(s.x1 - s.x0),
+    h: Math.abs(s.y1 - s.y0),
+  };
+}
 
-  const commit = () => {
-    const text = input.value.trim();
+function hitTest(shapes, p) {
+  const pad = 6;
+  for (let i = shapes.length - 1; i >= 0; i--) {
+    const b = shapeBBox(shapes[i]);
+    if (!b) continue;
+    if (p.x >= b.x - pad && p.x <= b.x + b.w + pad && p.y >= b.y - pad && p.y <= b.y + b.h + pad) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function translateShape(s, dx, dy) {
+  if (s.tool === "pen") {
+    s.points = s.points.map((pt) => ({ x: pt.x + dx, y: pt.y + dy }));
+  } else if (s.tool === "text") {
+    s.x += dx;
+    s.y += dy;
+  } else {
+    s.x0 += dx;
+    s.y0 += dy;
+    s.x1 += dx;
+    s.y1 += dy;
+  }
+}
+
+// Open a textarea sized to the box the user just dragged, then turn what they
+// type into a wrapped text annotation anchored to that box.
+function openTextBox(box, cap) {
+  const x = Math.min(box.x0, box.x1);
+  const y = Math.min(box.y0, box.y1);
+  let w = Math.abs(box.x1 - box.x0);
+  let h = Math.abs(box.y1 - box.y0);
+
+  const r = canvas.getBoundingClientRect();
+  const scaleX = r.width / canvas.width; // displayed px per canvas px
+  const scaleY = r.height / canvas.height;
+
+  // Pick a canvas-space font size that reads ~16px on screen regardless of
+  // how much the canvas is scaled down, so typing stays comfortable.
+  const size = Math.max(10, Math.round(16 / scaleX));
+
+  // A bare click (or a tiny drag) falls back to a sensible default box.
+  if (w < 40) w = Math.round(220 / scaleX);
+  if (h < size) h = Math.round(size * 1.4);
+
+  const input = $("text-input");
+  input.value = "";
+  input.style.left = r.left + x * scaleX + "px";
+  input.style.top = r.top + y * scaleY + "px";
+  input.style.width = w * scaleX + "px";
+  input.style.height = h * scaleY + "px";
+  input.style.fontSize = size * scaleX + "px";
+  input.style.lineHeight = "1.25";
+  input.style.color = tool.color;
+  input.classList.remove("hidden");
+
+  let done = false;
+  const close = () => {
+    done = true;
     input.classList.add("hidden");
     input.onblur = null;
     input.onkeydown = null;
-    const c = activeCap();
-    if (text && c) {
-      c.shapes.push({ tool: "text", color: tool.color, x: p.x, y: p.y, text, size: 22 });
+    input.style.width = "";
+    input.style.height = "";
+  };
+  const commit = () => {
+    if (done) return;
+    const text = input.value.replace(/\s+$/, "");
+    close();
+    if (text && cap) {
+      cap.shapes.push({ tool: "text", color: tool.color, x, y, w, size, text });
       redraw();
     }
   };
-  input.onblur = commit;
+
   input.onkeydown = (ev) => {
-    if (ev.key === "Enter") commit();
     if (ev.key === "Escape") {
-      input.classList.add("hidden");
-      input.onblur = null;
+      ev.preventDefault();
+      close();
+    } else if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
+      ev.preventDefault(); // ⌘/Ctrl+Enter places it; plain Enter is a newline
+      commit();
     }
   };
+
+  // Defer focus past the click that opened the box — focusing during the
+  // pointer event gets undone by the browser's own focus handling, which would
+  // blur immediately and commit empty text.
+  requestAnimationFrame(() => {
+    if (done) return;
+    input.focus();
+    input.onblur = commit;
+  });
 }
 
 function redraw() {
@@ -416,13 +567,12 @@ function drawShape(g, s, baseImg) {
     s.points.forEach((pt, i) => (i ? g.lineTo(pt.x, pt.y) : g.moveTo(pt.x, pt.y)));
     g.stroke();
   } else if (s.tool === "text") {
-    g.font = `bold ${s.size || 22}px -apple-system, sans-serif`;
-    g.textBaseline = "top";
-    g.lineWidth = 4;
-    g.strokeStyle = "rgba(255,255,255,.9)";
-    g.strokeText(s.text, s.x, s.y);
-    g.fillStyle = s.color;
-    g.fillText(s.text, s.x, s.y);
+    drawWrappedText(g, s);
+  } else if (s.tool === "textbox") {
+    // Live preview of the box being dragged out for the text tool.
+    g.setLineDash([6, 4]);
+    g.lineWidth = 1.5;
+    g.strokeRect(Math.min(s.x0, s.x1), Math.min(s.y0, s.y1), Math.abs(s.x1 - s.x0), Math.abs(s.y1 - s.y0));
   } else if (s.tool === "blur") {
     const x = Math.min(s.x0, s.x1), y = Math.min(s.y0, s.y1);
     const w = Math.abs(s.x1 - s.x0), h = Math.abs(s.y1 - s.y0);
@@ -437,6 +587,63 @@ function drawShape(g, s, baseImg) {
     }
   }
   g.restore();
+}
+
+// Split text into rendered lines, wrapping words at maxW (canvas units) and
+// honoring explicit newlines. `g` must already have the target font set.
+function wrapLines(g, text, maxW) {
+  const out = [];
+  for (const para of String(text).split("\n")) {
+    if (!para) {
+      out.push("");
+      continue;
+    }
+    const words = para.split(" ");
+    let line = "";
+    for (const word of words) {
+      const test = line ? line + " " + word : word;
+      if (maxW && line && g.measureText(test).width > maxW) {
+        out.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+function drawWrappedText(g, s) {
+  const size = s.size || 22;
+  g.save();
+  g.font = `bold ${size}px -apple-system, sans-serif`;
+  g.textBaseline = "top";
+  g.lineJoin = "round";
+  const lineHeight = size * 1.25;
+  const lines = wrapLines(g, s.text, s.w || Infinity);
+  let y = s.y;
+  for (const line of lines) {
+    g.lineWidth = 4;
+    g.strokeStyle = "rgba(255,255,255,.9)";
+    g.strokeText(line, s.x, y);
+    g.fillStyle = s.color;
+    g.fillText(line, s.x, y);
+    y += lineHeight;
+  }
+  g.restore();
+}
+
+// Rendered width/height of a text shape, for hit-testing and selection.
+function textMetrics(s) {
+  const size = s.size || 22;
+  ctx.save();
+  ctx.font = `bold ${size}px -apple-system, sans-serif`;
+  const lines = wrapLines(ctx, s.text, s.w || Infinity);
+  let widest = 0;
+  for (const line of lines) widest = Math.max(widest, ctx.measureText(line).width);
+  ctx.restore();
+  return { w: widest, h: Math.max(1, lines.length) * size * 1.25 };
 }
 
 function drawArrow(g, x0, y0, x1, y1, size) {

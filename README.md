@@ -14,8 +14,10 @@ but the report lands directly in your Linear project with the capture attached.
 - ✂️ **Capture area** — drag to select a region on the page; only that rectangle is kept.
 - 🎥 **Screen recording** of the tab as WebM, with optional tab audio
   (`chrome.tabCapture` → offscreen document → `MediaRecorder`).
-- 🖊️ **Annotation editor** for screenshots — rectangle, arrow, freehand, text, and a
-  **blur/redact** tool for hiding sensitive data.
+- 🖊️ **Annotation editor** for screenshots — rectangle, arrow, freehand, **text**
+  (drag a box, then type — it wraps to the box), and a **blur/redact** tool for hiding
+  sensitive data. The **select** tool drags any annotation to reposition it; **undo** is on
+  the toolbar and ⌘/Ctrl+Z.
 - 🗂️ **Multiple captures per issue** — keep the editor open and take more
   screenshots/recordings; each is appended to the same report. Annotate every shot
   individually and give each its own note, on top of one general issue description.
