@@ -53,6 +53,16 @@ body {
 }
 .banner a { color: #7a4b00; font-weight: 600; }
 
+.draft-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 10px 14px 0; padding: 8px 10px; border-radius: 8px;
+  background: var(--hover); border: 1px solid var(--border); font-size: 12px;
+}
+.draft-bar #draft-text { font-weight: 600; }
+.draft-actions { display: flex; gap: 10px; }
+.draft-actions a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.draft-actions a:hover { text-decoration: underline; }
+
 .actions { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
 
 .action {

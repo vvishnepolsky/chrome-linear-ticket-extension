@@ -42,10 +42,39 @@ function canCapture(tab) {
   return /^https?:|^file:/.test(tab.url);
 }
 
+async function refreshDraftBar() {
+  try {
+    const state = await send({ type: "GET_DRAFT_STATE" });
+    const bar = $("draft-bar");
+    if (state && state.active && state.count > 0) {
+      $("draft-text").textContent = `${state.count} capture${state.count > 1 ? "s" : ""} in this report`;
+      bar.classList.remove("hidden");
+      $("open-draft").onclick = async (e) => {
+        e.preventDefault();
+        try {
+          await chrome.tabs.update(state.tabId, { active: true });
+          const t = await chrome.tabs.get(state.tabId);
+          await chrome.windows.update(t.windowId, { focused: true });
+          window.close();
+        } catch (_) {}
+      };
+      $("new-report").onclick = async (e) => {
+        e.preventDefault();
+        await send({ type: "NEW_DRAFT" }).catch(() => {});
+        bar.classList.add("hidden");
+      };
+    } else {
+      bar.classList.add("hidden");
+    }
+  } catch (_) {}
+}
+
 async function init() {
   // API key banner
   const { linearApiKey } = await chrome.storage.local.get("linearApiKey");
   if (!linearApiKey) $("no-key").classList.remove("hidden");
+
+  refreshDraftBar();
 
   // Reflect recording state
   try {

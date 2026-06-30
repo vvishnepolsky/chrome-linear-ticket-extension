@@ -16,6 +16,9 @@ but the report lands directly in your Linear project with the capture attached.
   (`chrome.tabCapture` → offscreen document → `MediaRecorder`).
 - 🖊️ **Annotation editor** for screenshots — rectangle, arrow, freehand, text, and a
   **blur/redact** tool for hiding sensitive data.
+- 🗂️ **Multiple captures per issue** — keep the editor open and take more
+  screenshots/recordings; each is appended to the same report. Annotate every shot
+  individually and give each its own note, on top of one general issue description.
 - 🐞 **Automatic diagnostics** captured in the background, just like Jam:
   - `console.log/info/warn/error` + uncaught errors & promise rejections
   - `fetch` and `XMLHttpRequest` calls (method, status, duration)
@@ -35,7 +38,7 @@ but the report lands directly in your Linear project with the capture attached.
 | `editor.html/js/css` | Preview, annotate, and fill in the Linear issue form |
 | `options.html/js/css` | Store the Linear API key and pick defaults |
 | `linear.js` | Linear GraphQL client (upload + issue create) |
-| `db.js` | IndexedDB store for capture blobs shared across contexts |
+| `db.js` | IndexedDB store for capture blobs + drafts shared across contexts |
 
 ## Install (load unpacked)
 
@@ -64,7 +67,13 @@ The key is stored with `chrome.storage.local` and is only ever sent to `api.line
      reopen it and hit **Stop & edit**.
 3. The editor opens: annotate (screenshots), review the captured console/network/env,
    write a title + description, pick team/project/priority/labels.
-4. Click **Create issue** — you'll get a link to the new Linear issue.
+4. **Add more shots to the same issue** (optional): leave the editor tab open and capture
+   again from the popup — the new capture is appended to the report and shown in the
+   thumbnail strip at the bottom of the editor. Click a thumbnail to switch between shots;
+   each keeps its own annotations and its own note. The popup shows a running count and an
+   **Open editor** / **New** control; use **New report** to start a fresh, separate issue.
+5. Click **Create issue** — every screenshot is embedded inline (in order, with its note)
+   and attached; you'll get a link to the new Linear issue.
 
 ## Notes & limitations
 
