@@ -288,13 +288,14 @@ function wireAnnotation() {
     };
   });
 
-  $("undo").onclick = () => {
+  const undo = () => {
     const c = activeCap();
-    if (c) {
+    if (c && c.shapes.length) {
       c.shapes.pop();
       redraw();
     }
   };
+  $("undo").onclick = undo;
   $("clear").onclick = () => {
     const c = activeCap();
     if (c) {
@@ -306,6 +307,15 @@ function wireAnnotation() {
   canvas.addEventListener("pointerdown", onDown);
   canvas.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
+
+  // Cmd/Ctrl+Z undoes the last annotation (unless you're typing in a field).
+  window.addEventListener("keydown", (e) => {
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+    if (!typing && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      undo();
+    }
+  });
 }
 
 function toCanvasCoords(e) {
@@ -321,6 +331,9 @@ function onDown(e) {
   const p = toCanvasCoords(e);
 
   if (tool.tool === "text") {
+    // Stop the canvas click from grabbing focus back (which would instantly
+    // blur — and empty-commit — the text input we're about to open).
+    e.preventDefault();
     promptText(p, e.clientX, e.clientY);
     return;
   }
@@ -366,27 +379,44 @@ function promptText(p, clientX, clientY) {
   input.style.top = clientY + "px";
   input.style.color = tool.color;
   input.value = "";
-  input.focus();
 
-  const commit = () => {
-    const text = input.value.trim();
+  let done = false;
+  const close = () => {
+    done = true;
     input.classList.add("hidden");
     input.onblur = null;
     input.onkeydown = null;
+  };
+  const commit = () => {
+    if (done) return;
+    const text = input.value.trim();
+    close();
     const c = activeCap();
     if (text && c) {
       c.shapes.push({ tool: "text", color: tool.color, x: p.x, y: p.y, text, size: 22 });
       redraw();
     }
   };
-  input.onblur = commit;
+
   input.onkeydown = (ev) => {
-    if (ev.key === "Enter") commit();
-    if (ev.key === "Escape") {
-      input.classList.add("hidden");
-      input.onblur = null;
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      commit();
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      close();
     }
   };
+
+  // Defer focus past the click that opened this input. Focusing during the
+  // pointerdown gets undone by the browser's own click focus handling, which
+  // would blur immediately and commit empty text. We also attach the
+  // blur-to-commit handler only after we hold focus, for the same reason.
+  requestAnimationFrame(() => {
+    if (done) return;
+    input.focus();
+    input.onblur = commit;
+  });
 }
 
 function redraw() {
