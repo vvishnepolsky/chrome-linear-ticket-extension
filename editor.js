@@ -738,23 +738,9 @@ function renderDiagnostics(cap) {
 // ---------------------------------------------------------------------------
 // Linear form
 // ---------------------------------------------------------------------------
-function prefillForm() {
-  const m = (captures[0] && captures[0].meta) || {};
-  const host = (() => {
-    try {
-      return new URL(m.url).host;
-    } catch (_) {
-      return "";
-    }
-  })();
-  if (host && !$("title").value) $("title").value = `Bug on ${host}`;
-}
-
 async function loadLinear() {
-  const { linearApiKey, defaultTeamId, defaultProjectId, defaultPriority, defaultStateId } =
-    await chrome.storage.local.get(["linearApiKey", "defaultTeamId", "defaultProjectId", "defaultPriority", "defaultStateId"]);
-
-  prefillForm();
+  const { linearApiKey, defaultTeamId, defaultProjectId, defaultMilestoneId, defaultPriority, defaultStateId } =
+    await chrome.storage.local.get(["linearApiKey", "defaultTeamId", "defaultProjectId", "defaultMilestoneId", "defaultPriority", "defaultStateId"]);
 
   if (!linearApiKey) {
     $("no-key-warn").classList.remove("hidden");
@@ -781,7 +767,7 @@ async function loadLinear() {
     }
     teamSel.value = defaultTeamId && resp.teams.some((t) => t.id === defaultTeamId) ? defaultTeamId : (resp.teams[0] && resp.teams[0].id) || "";
     teamSel.onchange = () => onTeamChange(teamSel.value);
-    await onTeamChange(teamSel.value, defaultProjectId, defaultStateId);
+    await onTeamChange(teamSel.value, defaultProjectId, defaultStateId, defaultMilestoneId);
     loadUsers(); // assignees are workspace-wide, independent of the team
   } catch (err) {
     setSubmitStatus("Couldn't load Linear teams: " + (err.message || err), "err");
@@ -797,7 +783,7 @@ async function loadUsers() {
   } catch (_) {}
 }
 
-async function onTeamChange(teamId, preselectProject, preselectState) {
+async function onTeamChange(teamId, preselectProject, preselectState, preselectMilestone) {
   const projSel = $("project");
   const stateSel = $("state");
   projSel.innerHTML = '<option value="">—</option>';
@@ -822,7 +808,7 @@ async function onTeamChange(teamId, preselectProject, preselectState) {
     if (preselectProject) projSel.value = preselectProject;
     // Milestones depend on the chosen project.
     projSel.onchange = () => loadMilestones(projSel.value);
-    await loadMilestones(projSel.value);
+    await loadMilestones(projSel.value, preselectMilestone);
   }
   if (states && states.ok) {
     for (const s of states.states) {
@@ -1047,7 +1033,7 @@ function renderAssigneeMenu(query) {
   }
 }
 
-function renderMilestones(milestones) {
+function renderMilestones(milestones, preselect) {
   const sel = $("milestone");
   sel.innerHTML = '<option value="">—</option>';
   for (const m of milestones) {
@@ -1057,13 +1043,14 @@ function renderMilestones(milestones) {
     sel.appendChild(o);
   }
   sel.disabled = milestones.length === 0;
+  if (preselect && milestones.some((m) => m.id === preselect)) sel.value = preselect;
 }
 
-async function loadMilestones(projectId) {
+async function loadMilestones(projectId, preselect) {
   if (!projectId) return renderMilestones([]);
   try {
     const resp = await send({ type: "LINEAR_LIST_MILESTONES", projectId });
-    renderMilestones(resp && resp.ok ? resp.milestones : []);
+    renderMilestones(resp && resp.ok ? resp.milestones : [], preselect);
   } catch (_) {
     renderMilestones([]);
   }
@@ -1076,6 +1063,16 @@ function wireForm() {
   $("new-report").onclick = async () => {
     await send({ type: "NEW_DRAFT" }).catch(() => {});
     setSubmitStatus("Started a new report — new captures won't be added to this tab.", "");
+  };
+  $("save-defaults").onclick = async () => {
+    await chrome.storage.local.set({
+      defaultTeamId: $("team").value || null,
+      defaultProjectId: $("project").value || null,
+      defaultMilestoneId: $("milestone").value || null,
+      defaultStateId: $("state").value || null,
+      defaultPriority: Number($("priority").value || 0),
+    });
+    setSubmitStatus("Saved current team/project/milestone/status/priority as your defaults.", "ok");
   };
 }
 

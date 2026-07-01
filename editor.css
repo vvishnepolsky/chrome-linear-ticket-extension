@@ -181,6 +181,14 @@ select option { background: var(--panel); color: var(--fg); }
 .submit-status { font-size: 12.5px; min-height: 16px; }
 .submit-status.err { color: var(--err); }
 .submit-status.busy { color: var(--muted); }
+.submit-status.ok { color: var(--ok); }
+
+.req { color: var(--err); }
+.linklike {
+  align-self: flex-start; background: none; border: none; padding: 2px 0; cursor: pointer;
+  color: var(--accent); font: inherit; font-size: 12px;
+}
+.linklike:hover { text-decoration: underline; }
 .success {
   padding: 12px; border-radius: 8px; background: rgba(47,158,68,.12); color: var(--ok);
   font-size: 13px;

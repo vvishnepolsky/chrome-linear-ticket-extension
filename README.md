@@ -54,7 +54,9 @@ but the report lands directly in your Linear project with the capture attached.
 
 1. In Linear: **Settings → Security & access → Personal API keys → New key**.
 2. Click the Captura icon → ⚙ (or right-click → Options).
-3. Paste the key, click **Save & verify**, then optionally pick a default team/project.
+3. Paste the key, click **Save & verify**, then optionally pick default team / project /
+   milestone / status / priority. You can also set these straight from the editor via
+   **"Save these selections as my defaults."**
 
 The key is stored with `chrome.storage.local` and is only ever sent to `api.linear.app`.
 
