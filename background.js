@@ -174,6 +174,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         .catch((err) => sendResponse({ ok: false, error: errStr(err) }));
       return true;
 
+    case "LINEAR_LIST_MILESTONES":
+      withKey((key) => linear.listMilestones(key, msg.projectId))
+        .then((milestones) => sendResponse({ ok: true, milestones }))
+        .catch((err) => sendResponse({ ok: false, error: errStr(err) }));
+      return true;
+
+    case "LINEAR_LIST_USERS":
+      withKey((key) => linear.listUsers(key))
+        .then((users) => sendResponse({ ok: true, users }))
+        .catch((err) => sendResponse({ ok: false, error: errStr(err) }));
+      return true;
+
     case "LINEAR_LIST_STATES":
       withKey((key) => linear.listStates(key, msg.teamId))
         .then((states) => sendResponse({ ok: true, states }))
@@ -437,6 +449,8 @@ async function handleCreateTicket(msg) {
     description,
   };
   if (msg.projectId) input.projectId = msg.projectId;
+  if (msg.projectMilestoneId) input.projectMilestoneId = msg.projectMilestoneId;
+  if (msg.assigneeId) input.assigneeId = msg.assigneeId;
   if (msg.stateId) input.stateId = msg.stateId;
   if (typeof msg.priority === "number") input.priority = msg.priority;
   if (Array.isArray(msg.labelIds) && msg.labelIds.length) input.labelIds = msg.labelIds;

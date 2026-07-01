@@ -103,10 +103,21 @@
             </label>
           </div>
 
-          <label class="field">
+          <div class="grid2">
+            <label class="field">
+              <span>Milestone</span>
+              <select id="milestone"><option value="">—</option></select>
+            </label>
+            <label class="field">
+              <span>Assignee</span>
+              <select id="assignee"><option value="">Unassigned</option></select>
+            </label>
+          </div>
+
+          <div class="field">
             <span>Labels</span>
-            <select id="labels" multiple size="1"></select>
-          </label>
+            <div id="labels" class="chip-select"></div>
+          </div>
 
           <label class="checkline">
             <input type="checkbox" id="include-attachment" checked />

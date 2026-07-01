@@ -25,7 +25,8 @@ but the report lands directly in your Linear project with the capture attached.
   - `console.log/info/warn/error` + uncaught errors & promise rejections
   - `fetch` and `XMLHttpRequest` calls (method, status, duration)
   - environment: URL, user agent, viewport, screen, language, timezone, network type
-- 🎯 **One-click Linear issue** — pick team, project, **status**, priority, and labels. The
+- 🎯 **One-click Linear issue** — pick team, project, **milestone** (when the project has
+  any), **assignee**, **status**, priority, and labels. The
   capture is uploaded to Linear's CDN and embedded; diagnostics are appended to the description.
 
 ## How it fits together

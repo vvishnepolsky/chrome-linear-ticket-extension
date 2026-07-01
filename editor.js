@@ -774,18 +774,34 @@ async function loadLinear() {
     teamSel.value = defaultTeamId && resp.teams.some((t) => t.id === defaultTeamId) ? defaultTeamId : (resp.teams[0] && resp.teams[0].id) || "";
     teamSel.onchange = () => onTeamChange(teamSel.value);
     await onTeamChange(teamSel.value, defaultProjectId, defaultStateId);
+    loadUsers(); // assignees are workspace-wide, independent of the team
   } catch (err) {
     setSubmitStatus("Couldn't load Linear teams: " + (err.message || err), "err");
   }
 }
 
+async function loadUsers() {
+  try {
+    const resp = await send({ type: "LINEAR_LIST_USERS" });
+    if (!resp || !resp.ok) return;
+    const sel = $("assignee");
+    sel.innerHTML = '<option value="">Unassigned</option>';
+    for (const u of resp.users) {
+      const o = document.createElement("option");
+      o.value = u.id;
+      o.textContent = (u.displayName || u.name || u.email || "User") + (u.isMe ? " (me)" : "");
+      sel.appendChild(o);
+    }
+  } catch (_) {}
+}
+
 async function onTeamChange(teamId, preselectProject, preselectState) {
   const projSel = $("project");
-  const labelSel = $("labels");
   const stateSel = $("state");
   projSel.innerHTML = '<option value="">—</option>';
-  labelSel.innerHTML = "";
   stateSel.innerHTML = '<option value="">Team default</option>';
+  renderLabels([]);
+  renderMilestones([]);
   if (!teamId) return;
 
   const [proj, labels, states] = await Promise.all([
@@ -802,6 +818,9 @@ async function onTeamChange(teamId, preselectProject, preselectState) {
       projSel.appendChild(o);
     }
     if (preselectProject) projSel.value = preselectProject;
+    // Milestones depend on the chosen project.
+    projSel.onchange = () => loadMilestones(projSel.value);
+    await loadMilestones(projSel.value);
   }
   if (states && states.ok) {
     for (const s of states.states) {
@@ -814,13 +833,54 @@ async function onTeamChange(teamId, preselectProject, preselectState) {
       stateSel.value = preselectState;
     }
   }
-  if (labels && labels.ok) {
-    for (const l of labels.labels) {
-      const o = document.createElement("option");
-      o.value = l.id;
-      o.textContent = l.name;
-      labelSel.appendChild(o);
-    }
+  if (labels && labels.ok) renderLabels(labels.labels);
+}
+
+// Labels are rendered as themed checkbox chips (a native multi-select renders
+// poorly in dark mode and hides the label colors).
+function renderLabels(labels) {
+  const wrap = $("labels");
+  wrap.innerHTML = "";
+  for (const l of labels) {
+    const chip = document.createElement("label");
+    chip.className = "chip";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = l.id;
+    cb.onchange = () => chip.classList.toggle("checked", cb.checked);
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = l.color || "var(--muted)";
+    chip.appendChild(cb);
+    chip.appendChild(dot);
+    chip.appendChild(document.createTextNode(l.name));
+    wrap.appendChild(chip);
+  }
+}
+
+function selectedLabelIds() {
+  return Array.from($("labels").querySelectorAll("input:checked")).map((c) => c.value);
+}
+
+function renderMilestones(milestones) {
+  const sel = $("milestone");
+  sel.innerHTML = '<option value="">—</option>';
+  for (const m of milestones) {
+    const o = document.createElement("option");
+    o.value = m.id;
+    o.textContent = m.name;
+    sel.appendChild(o);
+  }
+  sel.disabled = milestones.length === 0;
+}
+
+async function loadMilestones(projectId) {
+  if (!projectId) return renderMilestones([]);
+  try {
+    const resp = await send({ type: "LINEAR_LIST_MILESTONES", projectId });
+    renderMilestones(resp && resp.ok ? resp.milestones : []);
+  } catch (_) {
+    renderMilestones([]);
   }
 }
 
@@ -868,7 +928,7 @@ async function onSubmit() {
       }
     }
 
-    const labelIds = Array.from($("labels").selectedOptions).map((o) => o.value);
+    const labelIds = selectedLabelIds();
     const items = captures.map((c) => ({ captureId: c.id, caption: c.caption || "" }));
 
     const resp = await send({
@@ -878,6 +938,8 @@ async function onSubmit() {
       description: $("description").value,
       teamId,
       projectId: $("project").value || null,
+      projectMilestoneId: $("milestone").value || null,
+      assigneeId: $("assignee").value || null,
       stateId: $("state").value || null,
       priority: Number($("priority").value || 0),
       labelIds,
