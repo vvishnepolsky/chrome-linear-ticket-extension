@@ -103,10 +103,31 @@
             </label>
           </div>
 
-          <label class="field">
+          <div class="grid2">
+            <label class="field">
+              <span>Milestone</span>
+              <select id="milestone"><option value="">—</option></select>
+            </label>
+            <div class="field">
+              <span>Assignee</span>
+              <div id="assignee" class="ss">
+                <input type="text" id="assignee-search" class="ms-input" placeholder="Unassigned" autocomplete="off" />
+                <button type="button" id="assignee-clear" class="ss-clear hidden" title="Clear assignee">×</button>
+                <div id="assignee-menu" class="ms-menu hidden"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
             <span>Labels</span>
-            <select id="labels" multiple size="1"></select>
-          </label>
+            <div id="labels" class="ms">
+              <div id="labels-selected" class="ms-selected"></div>
+              <div class="ms-search">
+                <input type="text" id="labels-search" class="ms-input" placeholder="Search labels…" autocomplete="off" />
+                <div id="labels-menu" class="ms-menu hidden"></div>
+              </div>
+            </div>
+          </div>
 
           <label class="checkline">
             <input type="checkbox" id="include-attachment" checked />

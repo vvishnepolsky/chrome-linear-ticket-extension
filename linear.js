@@ -84,6 +84,32 @@ export async function listStates(apiKey, teamId) {
     .sort((a, b) => a.position - b.position);
 }
 
+export async function listMilestones(apiKey, projectId) {
+  // Milestones belong to a project, not a team.
+  const data = await gql(
+    apiKey,
+    `query($id: String!) {
+      project(id: $id) {
+        projectMilestones(first: 250) { nodes { id name targetDate } }
+      }
+    }`,
+    { id: projectId }
+  );
+  const nodes = (data.project && data.project.projectMilestones && data.project.projectMilestones.nodes) || [];
+  return nodes;
+}
+
+export async function listUsers(apiKey) {
+  // Workspace members, for the (optional) assignee picker.
+  const data = await gql(
+    apiKey,
+    `query { users(first: 250) { nodes { id name displayName email active isMe } } }`
+  );
+  return data.users.nodes
+    .filter((u) => u.active !== false)
+    .sort((a, b) => (a.displayName || a.name || "").localeCompare(b.displayName || b.name || ""));
+}
+
 export async function listLabels(apiKey, teamId) {
   const data = await gql(
     apiKey,

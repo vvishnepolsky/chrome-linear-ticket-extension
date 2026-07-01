@@ -20,6 +20,14 @@ let activeIndex = -1;
 let baseImage = null; // HTMLImageElement for the active screenshot
 let objUrl = null; // object URL backing the active image/video, revoked on switch
 
+// Labels searchable multi-select state.
+let allLabels = [];
+const selectedLabels = new Set();
+
+// Assignee searchable single-select state.
+let allUsers = [];
+let assigneeId = null;
+
 // ---- annotation tool state (shapes themselves live on each capture) ----
 const tool = {
   tool: "select",
@@ -774,18 +782,28 @@ async function loadLinear() {
     teamSel.value = defaultTeamId && resp.teams.some((t) => t.id === defaultTeamId) ? defaultTeamId : (resp.teams[0] && resp.teams[0].id) || "";
     teamSel.onchange = () => onTeamChange(teamSel.value);
     await onTeamChange(teamSel.value, defaultProjectId, defaultStateId);
+    loadUsers(); // assignees are workspace-wide, independent of the team
   } catch (err) {
     setSubmitStatus("Couldn't load Linear teams: " + (err.message || err), "err");
   }
 }
 
+async function loadUsers() {
+  try {
+    const resp = await send({ type: "LINEAR_LIST_USERS" });
+    if (!resp || !resp.ok) return;
+    allUsers = resp.users || [];
+    restoreAssigneeInput();
+  } catch (_) {}
+}
+
 async function onTeamChange(teamId, preselectProject, preselectState) {
   const projSel = $("project");
-  const labelSel = $("labels");
   const stateSel = $("state");
   projSel.innerHTML = '<option value="">—</option>';
-  labelSel.innerHTML = "";
   stateSel.innerHTML = '<option value="">Team default</option>';
+  renderLabels([]);
+  renderMilestones([]);
   if (!teamId) return;
 
   const [proj, labels, states] = await Promise.all([
@@ -802,6 +820,9 @@ async function onTeamChange(teamId, preselectProject, preselectState) {
       projSel.appendChild(o);
     }
     if (preselectProject) projSel.value = preselectProject;
+    // Milestones depend on the chosen project.
+    projSel.onchange = () => loadMilestones(projSel.value);
+    await loadMilestones(projSel.value);
   }
   if (states && states.ok) {
     for (const s of states.states) {
@@ -814,17 +835,243 @@ async function onTeamChange(teamId, preselectProject, preselectState) {
       stateSel.value = preselectState;
     }
   }
-  if (labels && labels.ok) {
-    for (const l of labels.labels) {
-      const o = document.createElement("option");
-      o.value = l.id;
-      o.textContent = l.name;
-      labelSel.appendChild(o);
+  if (labels && labels.ok) renderLabels(labels.labels);
+}
+
+// ---- labels: searchable multi-select --------------------------------------
+// A native multi-select shows every option at once and renders poorly in dark
+// mode, so we build a small combobox: a chip list + a filterable dropdown.
+function initLabelSelect() {
+  const input = $("labels-search");
+  const menu = $("labels-menu");
+
+  const open = () => {
+    renderLabelMenu(input.value);
+    menu.classList.remove("hidden");
+  };
+  const close = () => menu.classList.add("hidden");
+
+  input.onfocus = open;
+  input.oninput = open;
+  input.onkeydown = (e) => {
+    if (e.key === "Escape") {
+      close();
+      input.blur();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const first = menu.querySelector(".ms-opt");
+      if (first) toggleLabel(first.dataset.id);
     }
+  };
+  document.addEventListener("click", (e) => {
+    if (!$("labels").contains(e.target)) close();
+  });
+}
+
+function renderLabels(labels) {
+  allLabels = labels || [];
+  selectedLabels.clear();
+  const input = $("labels-search");
+  if (input) input.value = "";
+  renderLabelSelected();
+  renderLabelMenu("");
+  $("labels-menu").classList.add("hidden");
+}
+
+function toggleLabel(id) {
+  if (selectedLabels.has(id)) selectedLabels.delete(id);
+  else selectedLabels.add(id);
+  renderLabelSelected();
+  renderLabelMenu($("labels-search").value);
+}
+
+// Selected labels render as their own readable rows above the search box.
+function renderLabelSelected() {
+  const box = $("labels-selected");
+  box.innerHTML = "";
+  for (const id of selectedLabels) {
+    const l = allLabels.find((x) => x.id === id);
+    if (!l) continue;
+    const row = document.createElement("div");
+    row.className = "ms-row";
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = l.color || "#888";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = l.name;
+    const x = document.createElement("span");
+    x.className = "x";
+    x.textContent = "×";
+    x.title = "Remove label";
+    x.onclick = () => toggleLabel(id);
+    row.append(dot, name, x);
+    box.appendChild(row);
+  }
+}
+
+function renderLabelMenu(query) {
+  const menu = $("labels-menu");
+  menu.innerHTML = "";
+  if (!allLabels.length) {
+    menu.innerHTML = `<div class="ms-empty">No labels in this team.</div>`;
+    return;
+  }
+  const q = (query || "").trim().toLowerCase();
+  const matches = allLabels.filter((l) => !q || l.name.toLowerCase().includes(q));
+  if (!matches.length) {
+    menu.innerHTML = `<div class="ms-empty">No matches.</div>`;
+    return;
+  }
+  for (const l of matches) {
+    const opt = document.createElement("div");
+    opt.className = "ms-opt" + (selectedLabels.has(l.id) ? " sel" : "");
+    opt.dataset.id = l.id;
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = l.color || "#888";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = l.name;
+    const check = document.createElement("span");
+    check.className = "check";
+    check.textContent = "✓";
+    opt.append(dot, name, check);
+    // mousedown (not click) so we act before the input blurs.
+    opt.onmousedown = (e) => {
+      e.preventDefault();
+      toggleLabel(l.id);
+    };
+    menu.appendChild(opt);
+  }
+}
+
+function selectedLabelIds() {
+  return Array.from(selectedLabels);
+}
+
+// ---- assignee: searchable single-select -----------------------------------
+function userLabel(u) {
+  return u.name || u.displayName || u.email || "User";
+}
+
+function initAssigneeSelect() {
+  const input = $("assignee-search");
+  const menu = $("assignee-menu");
+  const clear = $("assignee-clear");
+
+  const open = () => {
+    renderAssigneeMenu(input.value);
+    menu.classList.remove("hidden");
+  };
+  const close = () => menu.classList.add("hidden");
+
+  input.onfocus = () => {
+    input.select();
+    open();
+  };
+  input.oninput = open;
+  input.onkeydown = (e) => {
+    if (e.key === "Escape") {
+      close();
+      input.blur();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const first = menu.querySelector(".ms-opt");
+      if (first) selectAssignee(first.dataset.id);
+    }
+  };
+  // Clicking away restores the input to the actual selection.
+  input.onblur = () => setTimeout(restoreAssigneeInput, 120);
+  clear.onclick = () => {
+    assigneeId = null;
+    restoreAssigneeInput();
+    close();
+  };
+  document.addEventListener("click", (e) => {
+    if (!$("assignee").contains(e.target)) close();
+  });
+}
+
+function restoreAssigneeInput() {
+  const input = $("assignee-search");
+  const u = allUsers.find((x) => x.id === assigneeId);
+  input.value = u ? userLabel(u) : "";
+  $("assignee-clear").classList.toggle("hidden", !u);
+}
+
+function selectAssignee(id) {
+  assigneeId = id;
+  restoreAssigneeInput();
+  $("assignee-menu").classList.add("hidden");
+}
+
+function renderAssigneeMenu(query) {
+  const menu = $("assignee-menu");
+  menu.innerHTML = "";
+  if (!allUsers.length) {
+    menu.innerHTML = `<div class="ms-empty">No users found.</div>`;
+    return;
+  }
+  const q = (query || "").trim().toLowerCase();
+  // A matching query filters; when the box just shows the current selection
+  // (no typing), show everyone.
+  const selectedLabelText = (() => {
+    const u = allUsers.find((x) => x.id === assigneeId);
+    return u ? userLabel(u).toLowerCase() : "";
+  })();
+  const matches =
+    !q || q === selectedLabelText
+      ? allUsers
+      : allUsers.filter((u) => userLabel(u).toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q));
+  if (!matches.length) {
+    menu.innerHTML = `<div class="ms-empty">No matches.</div>`;
+    return;
+  }
+  for (const u of matches) {
+    const opt = document.createElement("div");
+    opt.className = "ms-opt" + (u.id === assigneeId ? " sel" : "");
+    opt.dataset.id = u.id;
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = userLabel(u) + (u.isMe ? " (me)" : "");
+    const check = document.createElement("span");
+    check.className = "check";
+    check.textContent = "✓";
+    opt.append(name, check);
+    opt.onmousedown = (e) => {
+      e.preventDefault();
+      selectAssignee(u.id);
+    };
+    menu.appendChild(opt);
+  }
+}
+
+function renderMilestones(milestones) {
+  const sel = $("milestone");
+  sel.innerHTML = '<option value="">—</option>';
+  for (const m of milestones) {
+    const o = document.createElement("option");
+    o.value = m.id;
+    o.textContent = m.name;
+    sel.appendChild(o);
+  }
+  sel.disabled = milestones.length === 0;
+}
+
+async function loadMilestones(projectId) {
+  if (!projectId) return renderMilestones([]);
+  try {
+    const resp = await send({ type: "LINEAR_LIST_MILESTONES", projectId });
+    renderMilestones(resp && resp.ok ? resp.milestones : []);
+  } catch (_) {
+    renderMilestones([]);
   }
 }
 
 function wireForm() {
+  initLabelSelect();
+  initAssigneeSelect();
   $("submit").onclick = onSubmit;
   $("new-report").onclick = async () => {
     await send({ type: "NEW_DRAFT" }).catch(() => {});
@@ -868,7 +1115,7 @@ async function onSubmit() {
       }
     }
 
-    const labelIds = Array.from($("labels").selectedOptions).map((o) => o.value);
+    const labelIds = selectedLabelIds();
     const items = captures.map((c) => ({ captureId: c.id, caption: c.caption || "" }));
 
     const resp = await send({
@@ -878,6 +1125,8 @@ async function onSubmit() {
       description: $("description").value,
       teamId,
       projectId: $("project").value || null,
+      projectMilestoneId: $("milestone").value || null,
+      assigneeId: assigneeId || null,
       stateId: $("state").value || null,
       priority: Number($("priority").value || 0),
       labelIds,

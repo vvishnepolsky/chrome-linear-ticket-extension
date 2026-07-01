@@ -123,8 +123,55 @@ input[type="text"], textarea, select {
 textarea { resize: vertical; }
 input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-select[multiple] { min-height: 64px; }
+/* Keep native dropdown options readable in dark mode. */
+select option { background: var(--panel); color: var(--fg); }
 .checkline { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+
+/* Searchable selects (labels = multi, assignee = single) — themed for dark mode. */
+.ms, .ss { position: relative; }
+
+/* Selected labels: one readable row each, stacked above the search box. */
+.ms-selected { display: flex; flex-direction: column; gap: 4px; }
+.ms-selected:not(:empty) { margin-bottom: 6px; }
+.ms-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 12.5px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg);
+}
+.ms-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-row .x { cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; }
+.ms-row .x:hover { color: var(--err); }
+
+.ms-search { position: relative; }
+.ms-input {
+  width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--fg); font: inherit; outline: none;
+}
+.ms-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.ss .ms-input { padding-right: 28px; }
+
+.ms-menu {
+  position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 4px);
+  max-height: 220px; overflow-y: auto; padding: 4px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+.ms-opt {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;
+  cursor: pointer; font-size: 13px; color: var(--fg);
+}
+.ms-opt:hover, .ms-opt.active { background: var(--border); }
+.ms-opt .dot, .ms-row .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.ms-opt .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-opt .check { margin-left: auto; color: var(--accent); font-weight: 700; visibility: hidden; }
+.ms-opt.sel .check { visibility: visible; }
+.ms-empty { padding: 8px; color: var(--muted); font-size: 12px; }
+
+.ss-clear {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  border: none; background: transparent; color: var(--muted); cursor: pointer;
+  font-size: 17px; line-height: 1; padding: 2px 4px;
+}
+.ss-clear:hover { color: var(--err); }
 
 .primary { background: var(--accent); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
 .primary:hover { filter: brightness(1.05); }
