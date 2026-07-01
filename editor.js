@@ -20,6 +20,10 @@ let activeIndex = -1;
 let baseImage = null; // HTMLImageElement for the active screenshot
 let objUrl = null; // object URL backing the active image/video, revoked on switch
 
+// Labels searchable multi-select state.
+let allLabels = [];
+const selectedLabels = new Set();
+
 // ---- annotation tool state (shapes themselves live on each capture) ----
 const tool = {
   tool: "select",
@@ -789,7 +793,7 @@ async function loadUsers() {
     for (const u of resp.users) {
       const o = document.createElement("option");
       o.value = u.id;
-      o.textContent = (u.displayName || u.name || u.email || "User") + (u.isMe ? " (me)" : "");
+      o.textContent = (u.name || u.displayName || u.email || "User") + (u.isMe ? " (me)" : "");
       sel.appendChild(o);
     }
   } catch (_) {}
@@ -836,30 +840,125 @@ async function onTeamChange(teamId, preselectProject, preselectState) {
   if (labels && labels.ok) renderLabels(labels.labels);
 }
 
-// Labels are rendered as themed checkbox chips (a native multi-select renders
-// poorly in dark mode and hides the label colors).
+// ---- labels: searchable multi-select --------------------------------------
+// A native multi-select shows every option at once and renders poorly in dark
+// mode, so we build a small combobox: a chip list + a filterable dropdown.
+function initLabelSelect() {
+  const control = $("labels-control");
+  const input = $("labels-search");
+  const menu = $("labels-menu");
+
+  const open = () => {
+    renderLabelMenu(input.value);
+    menu.classList.remove("hidden");
+  };
+  const close = () => menu.classList.add("hidden");
+
+  control.onclick = () => {
+    input.focus();
+    open();
+  };
+  input.onfocus = open;
+  input.oninput = open;
+  input.onkeydown = (e) => {
+    if (e.key === "Escape") {
+      close();
+      input.blur();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const first = menu.querySelector(".ms-opt");
+      if (first) toggleLabel(first.dataset.id);
+    } else if (e.key === "Backspace" && !input.value && selectedLabels.size) {
+      toggleLabel(Array.from(selectedLabels).pop());
+    }
+  };
+  // Close when clicking outside the whole control.
+  document.addEventListener("click", (e) => {
+    if (!$("labels").contains(e.target)) close();
+  });
+}
+
 function renderLabels(labels) {
-  const wrap = $("labels");
-  wrap.innerHTML = "";
-  for (const l of labels) {
-    const chip = document.createElement("label");
-    chip.className = "chip";
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.value = l.id;
-    cb.onchange = () => chip.classList.toggle("checked", cb.checked);
+  allLabels = labels || [];
+  selectedLabels.clear();
+  const input = $("labels-search");
+  if (input) input.value = "";
+  renderLabelChips();
+  renderLabelMenu("");
+  $("labels-menu").classList.add("hidden");
+}
+
+function toggleLabel(id) {
+  if (selectedLabels.has(id)) selectedLabels.delete(id);
+  else selectedLabels.add(id);
+  renderLabelChips();
+  renderLabelMenu($("labels-search").value);
+}
+
+function renderLabelChips() {
+  const control = $("labels-control");
+  const input = $("labels-search");
+  control.querySelectorAll(".ms-chip").forEach((el) => el.remove());
+  for (const id of selectedLabels) {
+    const l = allLabels.find((x) => x.id === id);
+    if (!l) continue;
+    const chip = document.createElement("span");
+    chip.className = "ms-chip";
     const dot = document.createElement("span");
     dot.className = "dot";
-    dot.style.background = l.color || "var(--muted)";
-    chip.appendChild(cb);
+    dot.style.background = l.color || "#888";
     chip.appendChild(dot);
     chip.appendChild(document.createTextNode(l.name));
-    wrap.appendChild(chip);
+    const x = document.createElement("span");
+    x.className = "x";
+    x.textContent = "×";
+    x.onclick = (e) => {
+      e.stopPropagation();
+      toggleLabel(id);
+    };
+    chip.appendChild(x);
+    control.insertBefore(chip, input);
+  }
+  input.placeholder = selectedLabels.size ? "" : "Search labels…";
+}
+
+function renderLabelMenu(query) {
+  const menu = $("labels-menu");
+  menu.innerHTML = "";
+  if (!allLabels.length) {
+    menu.innerHTML = `<div class="ms-empty">No labels in this team.</div>`;
+    return;
+  }
+  const q = (query || "").trim().toLowerCase();
+  const matches = allLabels.filter((l) => !q || l.name.toLowerCase().includes(q));
+  if (!matches.length) {
+    menu.innerHTML = `<div class="ms-empty">No matches.</div>`;
+    return;
+  }
+  for (const l of matches) {
+    const opt = document.createElement("div");
+    opt.className = "ms-opt" + (selectedLabels.has(l.id) ? " sel" : "");
+    opt.dataset.id = l.id;
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = l.color || "#888";
+    const name = document.createElement("span");
+    name.textContent = l.name;
+    const check = document.createElement("span");
+    check.className = "check";
+    check.textContent = "✓";
+    opt.append(dot, name, check);
+    // mousedown (not click) so we act before the input blurs.
+    opt.onmousedown = (e) => {
+      e.preventDefault();
+      toggleLabel(l.id);
+    };
+    menu.appendChild(opt);
   }
 }
 
 function selectedLabelIds() {
-  return Array.from($("labels").querySelectorAll("input:checked")).map((c) => c.value);
+  return Array.from(selectedLabels);
 }
 
 function renderMilestones(milestones) {
@@ -885,6 +984,7 @@ async function loadMilestones(projectId) {
 }
 
 function wireForm() {
+  initLabelSelect();
   $("submit").onclick = onSubmit;
   $("new-report").onclick = async () => {
     await send({ type: "NEW_DRAFT" }).catch(() => {});

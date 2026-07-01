@@ -127,18 +127,40 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 select option { background: var(--panel); color: var(--fg); }
 .checkline { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
 
-/* Labels as themed chips (a native multi-select renders poorly in dark mode). */
-.chip-select { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip-select:empty::before { content: "No labels in this team."; color: var(--muted); font-size: 12px; }
-.chip {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
-  padding: 5px 10px; border: 1px solid var(--border); border-radius: 999px;
-  background: var(--bg); color: var(--fg); font-size: 12.5px; line-height: 1;
+/* Searchable multi-select (labels) — themed so it works in dark mode. */
+.ms { position: relative; }
+.ms-control {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  min-height: 38px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); cursor: text;
 }
-.chip:hover { border-color: var(--accent); }
-.chip input { position: absolute; opacity: 0; width: 0; height: 0; }
-.chip .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
-.chip.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ms-control:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
+.ms-input {
+  flex: 1; min-width: 90px; border: none; background: transparent; color: var(--fg);
+  font: inherit; padding: 3px; outline: none;
+}
+.ms-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px 3px 8px;
+  background: var(--accent); color: #fff; border-radius: 999px; font-size: 12px; line-height: 1;
+}
+.ms-chip .dot { width: 9px; height: 9px; border-radius: 50%; }
+.ms-chip .x { cursor: pointer; font-size: 14px; line-height: 1; opacity: .85; }
+.ms-chip .x:hover { opacity: 1; }
+.ms-menu {
+  position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 4px);
+  max-height: 220px; overflow-y: auto; padding: 4px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+.ms-opt {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;
+  cursor: pointer; font-size: 13px;
+}
+.ms-opt:hover, .ms-opt.active { background: var(--border); }
+.ms-opt .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.ms-opt .check { margin-left: auto; color: var(--accent); font-weight: 700; visibility: hidden; }
+.ms-opt.sel .check { visibility: visible; }
+.ms-empty { padding: 8px; color: var(--muted); font-size: 12px; }
 
 .primary { background: var(--accent); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
 .primary:hover { filter: brightness(1.05); }
