@@ -66,8 +66,8 @@
 
         <div class="form">
           <label class="field">
-            <span>Title</span>
-            <input type="text" id="title" placeholder="Short summary of the bug" />
+            <span>Title <span class="req">*</span></span>
+            <input type="text" id="title" placeholder="Short summary of the bug (required)" required />
           </label>
 
           <label class="field">
@@ -135,6 +135,7 @@
           </label>
 
           <button id="submit" class="primary big">Create issue</button>
+          <button id="save-defaults" class="linklike" type="button">↧ Save these selections as my defaults</button>
           <div id="submit-status" class="submit-status"></div>
           <div id="success" class="success hidden"></div>
         </div>
