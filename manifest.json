@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Captura — Bug Reports to Linear",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Capture screenshots or screen recordings with console logs, network requests, and environment metadata — then file a Linear issue in one click. A Jam.dev-style bug reporter.",
   "permissions": [
     "tabs",

@@ -24,6 +24,10 @@ let objUrl = null; // object URL backing the active image/video, revoked on swit
 let allLabels = [];
 const selectedLabels = new Set();
 
+// Assignee searchable single-select state.
+let allUsers = [];
+let assigneeId = null;
+
 // ---- annotation tool state (shapes themselves live on each capture) ----
 const tool = {
   tool: "select",
@@ -788,14 +792,8 @@ async function loadUsers() {
   try {
     const resp = await send({ type: "LINEAR_LIST_USERS" });
     if (!resp || !resp.ok) return;
-    const sel = $("assignee");
-    sel.innerHTML = '<option value="">Unassigned</option>';
-    for (const u of resp.users) {
-      const o = document.createElement("option");
-      o.value = u.id;
-      o.textContent = (u.name || u.displayName || u.email || "User") + (u.isMe ? " (me)" : "");
-      sel.appendChild(o);
-    }
+    allUsers = resp.users || [];
+    restoreAssigneeInput();
   } catch (_) {}
 }
 
@@ -844,7 +842,6 @@ async function onTeamChange(teamId, preselectProject, preselectState) {
 // A native multi-select shows every option at once and renders poorly in dark
 // mode, so we build a small combobox: a chip list + a filterable dropdown.
 function initLabelSelect() {
-  const control = $("labels-control");
   const input = $("labels-search");
   const menu = $("labels-menu");
 
@@ -854,10 +851,6 @@ function initLabelSelect() {
   };
   const close = () => menu.classList.add("hidden");
 
-  control.onclick = () => {
-    input.focus();
-    open();
-  };
   input.onfocus = open;
   input.oninput = open;
   input.onkeydown = (e) => {
@@ -868,11 +861,8 @@ function initLabelSelect() {
       e.preventDefault();
       const first = menu.querySelector(".ms-opt");
       if (first) toggleLabel(first.dataset.id);
-    } else if (e.key === "Backspace" && !input.value && selectedLabels.size) {
-      toggleLabel(Array.from(selectedLabels).pop());
     }
   };
-  // Close when clicking outside the whole control.
   document.addEventListener("click", (e) => {
     if (!$("labels").contains(e.target)) close();
   });
@@ -883,7 +873,7 @@ function renderLabels(labels) {
   selectedLabels.clear();
   const input = $("labels-search");
   if (input) input.value = "";
-  renderLabelChips();
+  renderLabelSelected();
   renderLabelMenu("");
   $("labels-menu").classList.add("hidden");
 }
@@ -891,35 +881,33 @@ function renderLabels(labels) {
 function toggleLabel(id) {
   if (selectedLabels.has(id)) selectedLabels.delete(id);
   else selectedLabels.add(id);
-  renderLabelChips();
+  renderLabelSelected();
   renderLabelMenu($("labels-search").value);
 }
 
-function renderLabelChips() {
-  const control = $("labels-control");
-  const input = $("labels-search");
-  control.querySelectorAll(".ms-chip").forEach((el) => el.remove());
+// Selected labels render as their own readable rows above the search box.
+function renderLabelSelected() {
+  const box = $("labels-selected");
+  box.innerHTML = "";
   for (const id of selectedLabels) {
     const l = allLabels.find((x) => x.id === id);
     if (!l) continue;
-    const chip = document.createElement("span");
-    chip.className = "ms-chip";
+    const row = document.createElement("div");
+    row.className = "ms-row";
     const dot = document.createElement("span");
     dot.className = "dot";
     dot.style.background = l.color || "#888";
-    chip.appendChild(dot);
-    chip.appendChild(document.createTextNode(l.name));
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = l.name;
     const x = document.createElement("span");
     x.className = "x";
     x.textContent = "×";
-    x.onclick = (e) => {
-      e.stopPropagation();
-      toggleLabel(id);
-    };
-    chip.appendChild(x);
-    control.insertBefore(chip, input);
+    x.title = "Remove label";
+    x.onclick = () => toggleLabel(id);
+    row.append(dot, name, x);
+    box.appendChild(row);
   }
-  input.placeholder = selectedLabels.size ? "" : "Search labels…";
 }
 
 function renderLabelMenu(query) {
@@ -943,6 +931,7 @@ function renderLabelMenu(query) {
     dot.className = "dot";
     dot.style.background = l.color || "#888";
     const name = document.createElement("span");
+    name.className = "name";
     name.textContent = l.name;
     const check = document.createElement("span");
     check.className = "check";
@@ -959,6 +948,103 @@ function renderLabelMenu(query) {
 
 function selectedLabelIds() {
   return Array.from(selectedLabels);
+}
+
+// ---- assignee: searchable single-select -----------------------------------
+function userLabel(u) {
+  return u.name || u.displayName || u.email || "User";
+}
+
+function initAssigneeSelect() {
+  const input = $("assignee-search");
+  const menu = $("assignee-menu");
+  const clear = $("assignee-clear");
+
+  const open = () => {
+    renderAssigneeMenu(input.value);
+    menu.classList.remove("hidden");
+  };
+  const close = () => menu.classList.add("hidden");
+
+  input.onfocus = () => {
+    input.select();
+    open();
+  };
+  input.oninput = open;
+  input.onkeydown = (e) => {
+    if (e.key === "Escape") {
+      close();
+      input.blur();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const first = menu.querySelector(".ms-opt");
+      if (first) selectAssignee(first.dataset.id);
+    }
+  };
+  // Clicking away restores the input to the actual selection.
+  input.onblur = () => setTimeout(restoreAssigneeInput, 120);
+  clear.onclick = () => {
+    assigneeId = null;
+    restoreAssigneeInput();
+    close();
+  };
+  document.addEventListener("click", (e) => {
+    if (!$("assignee").contains(e.target)) close();
+  });
+}
+
+function restoreAssigneeInput() {
+  const input = $("assignee-search");
+  const u = allUsers.find((x) => x.id === assigneeId);
+  input.value = u ? userLabel(u) : "";
+  $("assignee-clear").classList.toggle("hidden", !u);
+}
+
+function selectAssignee(id) {
+  assigneeId = id;
+  restoreAssigneeInput();
+  $("assignee-menu").classList.add("hidden");
+}
+
+function renderAssigneeMenu(query) {
+  const menu = $("assignee-menu");
+  menu.innerHTML = "";
+  if (!allUsers.length) {
+    menu.innerHTML = `<div class="ms-empty">No users found.</div>`;
+    return;
+  }
+  const q = (query || "").trim().toLowerCase();
+  // A matching query filters; when the box just shows the current selection
+  // (no typing), show everyone.
+  const selectedLabelText = (() => {
+    const u = allUsers.find((x) => x.id === assigneeId);
+    return u ? userLabel(u).toLowerCase() : "";
+  })();
+  const matches =
+    !q || q === selectedLabelText
+      ? allUsers
+      : allUsers.filter((u) => userLabel(u).toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q));
+  if (!matches.length) {
+    menu.innerHTML = `<div class="ms-empty">No matches.</div>`;
+    return;
+  }
+  for (const u of matches) {
+    const opt = document.createElement("div");
+    opt.className = "ms-opt" + (u.id === assigneeId ? " sel" : "");
+    opt.dataset.id = u.id;
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = userLabel(u) + (u.isMe ? " (me)" : "");
+    const check = document.createElement("span");
+    check.className = "check";
+    check.textContent = "✓";
+    opt.append(name, check);
+    opt.onmousedown = (e) => {
+      e.preventDefault();
+      selectAssignee(u.id);
+    };
+    menu.appendChild(opt);
+  }
 }
 
 function renderMilestones(milestones) {
@@ -985,6 +1071,7 @@ async function loadMilestones(projectId) {
 
 function wireForm() {
   initLabelSelect();
+  initAssigneeSelect();
   $("submit").onclick = onSubmit;
   $("new-report").onclick = async () => {
     await send({ type: "NEW_DRAFT" }).catch(() => {});
@@ -1039,7 +1126,7 @@ async function onSubmit() {
       teamId,
       projectId: $("project").value || null,
       projectMilestoneId: $("milestone").value || null,
-      assigneeId: $("assignee").value || null,
+      assigneeId: assigneeId || null,
       stateId: $("state").value || null,
       priority: Number($("priority").value || 0),
       labelIds,

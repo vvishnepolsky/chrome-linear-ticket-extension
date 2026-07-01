@@ -108,19 +108,24 @@
               <span>Milestone</span>
               <select id="milestone"><option value="">—</option></select>
             </label>
-            <label class="field">
+            <div class="field">
               <span>Assignee</span>
-              <select id="assignee"><option value="">Unassigned</option></select>
-            </label>
+              <div id="assignee" class="ss">
+                <input type="text" id="assignee-search" class="ms-input" placeholder="Unassigned" autocomplete="off" />
+                <button type="button" id="assignee-clear" class="ss-clear hidden" title="Clear assignee">×</button>
+                <div id="assignee-menu" class="ms-menu hidden"></div>
+              </div>
+            </div>
           </div>
 
           <div class="field">
             <span>Labels</span>
             <div id="labels" class="ms">
-              <div class="ms-control" id="labels-control">
+              <div id="labels-selected" class="ms-selected"></div>
+              <div class="ms-search">
                 <input type="text" id="labels-search" class="ms-input" placeholder="Search labels…" autocomplete="off" />
+                <div id="labels-menu" class="ms-menu hidden"></div>
               </div>
-              <div id="labels-menu" class="ms-menu hidden"></div>
             </div>
           </div>
 

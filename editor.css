@@ -127,25 +127,28 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 select option { background: var(--panel); color: var(--fg); }
 .checkline { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
 
-/* Searchable multi-select (labels) — themed so it works in dark mode. */
-.ms { position: relative; }
-.ms-control {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-  min-height: 38px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--bg); cursor: text;
+/* Searchable selects (labels = multi, assignee = single) — themed for dark mode. */
+.ms, .ss { position: relative; }
+
+/* Selected labels: one readable row each, stacked above the search box. */
+.ms-selected { display: flex; flex-direction: column; gap: 4px; }
+.ms-selected:not(:empty) { margin-bottom: 6px; }
+.ms-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-size: 12.5px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg);
 }
-.ms-control:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
+.ms-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-row .x { cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; }
+.ms-row .x:hover { color: var(--err); }
+
+.ms-search { position: relative; }
 .ms-input {
-  flex: 1; min-width: 90px; border: none; background: transparent; color: var(--fg);
-  font: inherit; padding: 3px; outline: none;
+  width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--fg); font: inherit; outline: none;
 }
-.ms-chip {
-  display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px 3px 8px;
-  background: var(--accent); color: #fff; border-radius: 999px; font-size: 12px; line-height: 1;
-}
-.ms-chip .dot { width: 9px; height: 9px; border-radius: 50%; }
-.ms-chip .x { cursor: pointer; font-size: 14px; line-height: 1; opacity: .85; }
-.ms-chip .x:hover { opacity: 1; }
+.ms-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.ss .ms-input { padding-right: 28px; }
+
 .ms-menu {
   position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 4px);
   max-height: 220px; overflow-y: auto; padding: 4px;
@@ -154,13 +157,21 @@ select option { background: var(--panel); color: var(--fg); }
 }
 .ms-opt {
   display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px;
-  cursor: pointer; font-size: 13px;
+  cursor: pointer; font-size: 13px; color: var(--fg);
 }
 .ms-opt:hover, .ms-opt.active { background: var(--border); }
-.ms-opt .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.ms-opt .dot, .ms-row .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.ms-opt .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-opt .check { margin-left: auto; color: var(--accent); font-weight: 700; visibility: hidden; }
 .ms-opt.sel .check { visibility: visible; }
 .ms-empty { padding: 8px; color: var(--muted); font-size: 12px; }
+
+.ss-clear {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  border: none; background: transparent; color: var(--muted); cursor: pointer;
+  font-size: 17px; line-height: 1; padding: 2px 4px;
+}
+.ss-clear:hover { color: var(--err); }
 
 .primary { background: var(--accent); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
 .primary:hover { filter: brightness(1.05); }
